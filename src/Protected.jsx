@@ -9,41 +9,41 @@ const Protected = () => {
     const [error, setError] = useState(null);
 
     const fetchSecretData = async () => {
-        // Random check: 50% chance to show captcha
-        if (Math.random() < 0.5) {
-            console.log('Random check: Direct access allowed');
-            await getData();
-        } else {
-            console.log('Random check: Captcha required');
-            setShowCaptcha(true);
-        }
-    };
-
-    const getData = async () => {
         try {
+            // Try to fetch data directly
             const response = await axios.get(`${API_URL}/api/secret`);
             setData(response.data.message);
             setShowCaptcha(false);
             setError(null);
         } catch (err) {
-            console.error('Error fetching data:', err);
-            setError('Failed to fetch data');
+            // Check if server challenged the request
+            if (err.response && err.response.status === 403 && err.response.data.requireCaptcha) {
+                console.log('Server challenged request: Captcha required');
+                setShowCaptcha(true);
+                setError('Security Check Required');
+            } else {
+                console.error('Error fetching data:', err);
+                setError('Failed to fetch data');
+            }
         }
     };
 
     const onCaptchaSuccess = async (token) => {
-        console.log('Captcha solved, verifying token...');
+        console.log('Captcha solved, retrying request with token...');
         try {
-            const response = await axios.post(`${API_URL}/verify`, { token });
-            if (response.data.success) {
-                console.log('Token verified, fetching data...');
-                await getData();
-            } else {
-                setError('Captcha verification failed');
-            }
+            // Retry the request with the token in headers
+            const response = await axios.get(`${API_URL}/api/secret`, {
+                headers: {
+                    'x-turnstile-token': token
+                }
+            });
+
+            setData(response.data.message);
+            setShowCaptcha(false);
+            setError(null);
         } catch (err) {
             console.error('Verification error:', err);
-            setError('Verification error');
+            setError('Verification failed or Server rejected token');
         }
     };
 
@@ -64,7 +64,7 @@ const Protected = () => {
                 {showCaptcha && (
                     <div className="flex flex-col items-center">
                         <p className="mb-4 text-yellow-700 bg-yellow-100 p-2 rounded">
-                            Security Check Required
+                            {error || 'Security Check Required'}
                         </p>
                         <Turnstile
                             siteKey="0x4AAAAAACL0J1b1xhJib1H0"
@@ -86,7 +86,7 @@ const Protected = () => {
                     </div>
                 )}
 
-                {error && (
+                {error && !showCaptcha && (
                     <div className="mt-4 p-4 bg-red-100 text-red-700 rounded">
                         {error}
                     </div>
