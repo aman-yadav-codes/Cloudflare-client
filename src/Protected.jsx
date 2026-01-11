@@ -9,41 +9,35 @@ const Protected = () => {
     const [error, setError] = useState(null);
 
     const fetchSecretData = async () => {
-        // Random check: 50% chance to show captcha
-        if (Math.random() < 0.5) {
-            console.log('Random check: Direct access allowed');
-            await getData();
-        } else {
-            console.log('Random check: Captcha required');
-            setShowCaptcha(true);
-        }
-    };
-
-    const getData = async () => {
+        setError(null);
         try {
-            const response = await axios.get(`${API_URL}/api/secret`);
+            // Try to fetch data directly (no token)
+            const response = await axios.post(`${API_URL}/api/secret`);
             setData(response.data.message);
             setShowCaptcha(false);
-            setError(null);
         } catch (err) {
-            console.error('Error fetching data:', err);
-            setError('Failed to fetch data');
+            if (err.response && err.response.status === 401 && err.response.data.error === 'captcha_required') {
+                console.log('Server requested captcha');
+                setShowCaptcha(true);
+                setError('Security check required. Please solve the captcha.');
+            } else {
+                console.error('Error fetching data:', err);
+                setError('Failed to fetch data');
+            }
         }
     };
 
     const onCaptchaSuccess = async (token) => {
-        console.log('Captcha solved, verifying token...');
+        console.log('Captcha solved, sending token...');
         try {
-            const response = await axios.post(`${API_URL}/verify`, { token });
-            if (response.data.success) {
-                console.log('Token verified, fetching data...');
-                await getData();
-            } else {
-                setError('Captcha verification failed');
-            }
+            // Retry fetch with token
+            const response = await axios.post(`${API_URL}/api/secret`, { token });
+            setData(response.data.message);
+            setShowCaptcha(false);
+            setError(null);
         } catch (err) {
             console.error('Verification error:', err);
-            setError('Verification error');
+            setError('Verification failed or server error');
         }
     };
 
