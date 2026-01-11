@@ -10,8 +10,8 @@ const Protected = () => {
 
     const fetchSecretData = async () => {
         try {
-            // Try to fetch data directly
-            const response = await axios.get(`${API_URL}/api/secret`);
+            // Try to fetch data directly (with credentials/cookies)
+            const response = await axios.get(`${API_URL}/api/secret`, { withCredentials: true });
             setData(response.data.message);
             setShowCaptcha(false);
             setError(null);
@@ -31,11 +31,12 @@ const Protected = () => {
     const onCaptchaSuccess = async (token) => {
         console.log('Captcha solved, retrying request with token...');
         try {
-            // Retry the request with the token in headers
+            // Retry the request with the token in headers AND credentials
             const response = await axios.get(`${API_URL}/api/secret`, {
                 headers: {
                     'x-turnstile-token': token
-                }
+                },
+                withCredentials: true
             });
 
             setData(response.data.message);
