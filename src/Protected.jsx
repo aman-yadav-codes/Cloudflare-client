@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import axios from 'axios';
+import API_URL from './config';
 
 const Protected = () => {
     const [data, setData] = useState(null);
@@ -20,7 +21,7 @@ const Protected = () => {
 
     const getData = async () => {
         try {
-            const response = await axios.get('http://localhost:3000/api/secret');
+            const response = await axios.get(`${API_URL}/api/secret`);
             setData(response.data.message);
             setShowCaptcha(false);
             setError(null);
@@ -33,7 +34,7 @@ const Protected = () => {
     const onCaptchaSuccess = async (token) => {
         console.log('Captcha solved, verifying token...');
         try {
-            const response = await axios.post('http://localhost:3000/verify', { token });
+            const response = await axios.post(`${API_URL}/verify`, { token });
             if (response.data.success) {
                 console.log('Token verified, fetching data...');
                 await getData();
