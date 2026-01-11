@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import axios from 'axios';
 import API_URL from './config';
@@ -7,20 +7,48 @@ const Protected = () => {
     const [data, setData] = useState(null);
     const [showCaptcha, setShowCaptcha] = useState(false);
     const [error, setError] = useState(null);
+    const [csrfToken, setCsrfToken] = useState(null);
+
+    useEffect(() => {
+        // Fetch CSRF token on mount
+        const fetchCsrfToken = async () => {
+            try {
+                const response = await axios.get(`${API_URL}/api/csrf-token`, { withCredentials: true });
+                setCsrfToken(response.data.csrfToken);
+            } catch (err) {
+                console.error('Error fetching CSRF token:', err);
+            }
+        };
+        fetchCsrfToken();
+    }, []);
 
     const fetchSecretData = async () => {
+        if (!csrfToken) {
+            setError('Initializing security...');
+            return;
+        }
+
         try {
-            // Try to fetch data directly (with credentials/cookies)
-            const response = await axios.get(`${API_URL}/api/secret`, { withCredentials: true });
+            // Try to fetch data directly (with credentials/cookies and CSRF token)
+            const response = await axios.get(`${API_URL}/api/secret`, {
+                withCredentials: true,
+                headers: {
+                    'x-csrf-token': csrfToken
+                }
+            });
             setData(response.data.message);
             setShowCaptcha(false);
             setError(null);
         } catch (err) {
             // Check if server challenged the request
-            if (err.response && err.response.status === 403 && err.response.data.requireCaptcha) {
-                console.log('Server challenged request: Captcha required');
-                setShowCaptcha(true);
-                setError('Security Check Required');
+            if (err.response && err.response.status === 403) {
+                if (err.response.data.requireCaptcha) {
+                    console.log('Server challenged request: Captcha required');
+                    setShowCaptcha(true);
+                    setError('Security Check Required');
+                } else {
+                    setError('Access Denied (CSRF or Invalid Session)');
+                }
             } else {
                 console.error('Error fetching data:', err);
                 setError('Failed to fetch data');
@@ -31,10 +59,11 @@ const Protected = () => {
     const onCaptchaSuccess = async (token) => {
         console.log('Captcha solved, retrying request with token...');
         try {
-            // Retry the request with the token in headers AND credentials
+            // Retry the request with the token in headers AND credentials AND CSRF
             const response = await axios.get(`${API_URL}/api/secret`, {
                 headers: {
-                    'x-turnstile-token': token
+                    'x-turnstile-token': token,
+                    'x-csrf-token': csrfToken
                 },
                 withCredentials: true
             });
@@ -56,9 +85,11 @@ const Protected = () => {
                 {!data && !showCaptcha && (
                     <button
                         onClick={fetchSecretData}
-                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        disabled={!csrfToken}
+                        className={`px-6 py-3 text-white rounded-lg transition-colors ${csrfToken ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'
+                            }`}
                     >
-                        Fetch Secret Data
+                        {csrfToken ? 'Fetch Secret Data' : 'Initializing...'}
                     </button>
                 )}
 
